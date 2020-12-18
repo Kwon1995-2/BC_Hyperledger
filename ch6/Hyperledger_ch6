@@ -1,0 +1,130 @@
+cd $GOPATH/src/stream-music-2/basic-network
+
+rm -fr config/*
+rm -fr crypto-config/* //이것을 안해줘서 계속 에러남
+
+./bin/cryptogen generate --config=./crypto-config.yaml
+
+mkdir config
+
+./bin/configtxgen -profile OrdererGenesis -outputBlock ./config/genesis.block
+
+./bin/configtxgen -profile Channel1 -outputCreateChannelTx ./config/channel1.tx -channelID channelsales1
+
+./bin/configtxgen -profile Channel2 -outputCreateChannelTx ./config/channel2.tx -channelID channelsales2
+
+./bin/configtxgen -profile Channel1 -outputAnchorPeersUpdate ./config/Sales1Organchors.tx -channelID channelsales1 -asOrg Sales1Org
+
+./bin/configtxgen -profile Channel2 -outputAnchorPeersUpdate ./config/Sales2Organchors.tx -channelID channelsales2 -asOrg Sales2Org
+
+./bin/configtxgen -profile Channel1 -outputAnchorPeersUpdate ./config/CustomerOrganchorsChannel1.tx -channelID channelsales1 -asOrg CustomerOrg
+
+./bin/configtxgen -profile Channel2 -outputAnchorPeersUpdate ./config/CustomerOrganchorsChannel2.tx -channelID channelsales2 -asOrg CustomerOrg
+
+
+docker-compose up -d
+docker-compose -p net up -d orderer1.acornpub.com orderer2.acornpub.com kafka1.acornpub.com kafka2.acornpub.com kafka3.acornpub.com kafka4.acornpub.com zookeeper1.acornpub.com zookeeper2.acornpub.com zookeeper3.acornpub.com peer0.sales1.acornpub.com couchdb1 peer1.sales1.acornpub.com couchdb2 peer0.customer.acornpub.com couchdb3 peer1.customer.acornpub.com couchdb4 peer0.sales2.acornpub.com couchdb5 peer1.sales2.acornpub.com couchdb6 cli1 cli2
+export MSYS_NO_PATHCONV=1
+docker-compose -f docker-compose.yaml up -d
+###################################################################################################
+[터미널1] sales1 조직의 peer0 노드의 CLI인 cli1에 접속
+docker exec -it cli1 bash
+
+peer channel create -o orderer1.acornpub.com:7050 -c channelsales1 -f /etc/hyperledger/configtx/channel1.tx
+//Error: got unexpected status: SERVICE_UNAVAILABLE -- backing Kafka cluster has not completed booting; try again later
+// --> 조금 기다리고 다시 시도하면 됨
+peer channel join -b channelsales1.block
+
+peer channel update -o orderer1.acornpub.com:7050 -c channelsales1 -f /etc/hyperledger/configtx/Sales1Organchors.tx
+
+export CORE_PEER_ADDRESS=peer1.sales1.acornpub.com:7051
+peer channel join -b channelsales1.block
+
+//
+export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
+
+peer channel join -b channelsales1.block
+//
+
+peer channel update -o orderer1.acornpub.com:7050 -c channelsales1 -f /etc/hyperledger/configtx/CustomerOrganchorsChannel1.tx
+
+export CORE_PEER_ADDRESS=peer1.customer.acornpub.com:7051 
+peer channel join -b channelsales1.block
+###################################################################################################
+[터미널2] peer0.sales2.acornpub.com CLI인 cli2에 접속
+docker exec -it cli2 bash
+
+peer channel create -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/channel2.tx
+
+peer channel join -b channelsales2.block
+
+peer channel update -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/Sales2Organchors.tx
+
+export CORE_PEER_ADDRESS=peer1.sales2.acornpub.com:7051
+peer channel join -b channelsales2.block
+
+//
+export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051 //peer1로 잘못 표기
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
+
+peer channel join -b channelsales2.block
+//
+
+peer channel update -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/CustomerOrganchorsChannel2.tx
+
+export CORE_PEER_ADDRESS=peer1.customer.acornpub.com:7051 
+//--> Error: proposal failed (err: bad proposal response 500: cannot create ledger from genesis block: LedgerID already exists)
+export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051
+peer channel join -b channelsales2.block 
+고객 조직에는 peer0, peer1이 있는데, peer1을 사용하면 이미 있는 ledgerid라는 오류가 나옴
+아마도 고객 조직이 하나이고, 오더러 조직도 하나라 ledgerid 중복 오류 문구가 뜨는 것으로 예상됨
+cli1 --> peer1.customer.acornpub.com:7051
+cli2 --> peer0.customer.acornpub.com:7051
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+체인코드 테스트
+///////////////////////////////////////////////////////////////////////////////////////////////////
+docker stop cli1 && docker rm cli1
+docker -p net up -d cli1
+빠져나오지 않고 계속 실행 --> 안전한 방법
+[터미널 1]
+set -ev
+peer chaincode install -n music-cc-ch1 -v 1.0 -p chaincode/music-go2
+peer chaincode install -n music-cc-ch1 -v 1.0 -p chaincode/go
+
+peer chaincode instantiate -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -v 1.0 -c '{"Args":[""]}' -P "OR ('Sales1Org.member','CustomerOrg.member')"
+
+//
+Error: could not assemble transaction, err proposal response was not successful, error code 500, msg chaincode registration failed: container exited with 0
+//
+
+peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -c '{"function":"initWallet","Args":[""]}'
+
+peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -c '{"function":"setMusic","Args":["Fabric","Hyper","20","1Q2W3E4R"]}'
+
+peer chaincode query -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -c '{"function":"getMusic","Args":["MS0"]}'
+###################################################################################################
+docker stop cli2 && docker rm cli2
+docker -p net up -d cli2
+[터미널 2]
+peer chaincode install -n music-cc-ch2 -v 1.0 -p chaincode/music-go2
+peer chaincode install -n music-cc-ch2 -v 1.0 -p chaincode/go
+
+peer chaincode instantiate -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -v 1.0 -c '{"Args":[""]}' -P "OR ('Sales2Org.member','CustomerOrg.member')"
+
+peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -c '{"function":"initWallet","Args":[""]}'
+
+peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -c '{"function":"setMusic","Args":["Fabric","Hyper","10","1Q2W3E4R"]}'
+
+peer chaincode query -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -c '{"function":"getMusic","Args":["MS0"]}'
+
