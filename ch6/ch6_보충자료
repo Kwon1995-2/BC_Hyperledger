@@ -1,0 +1,27 @@
+[터미널2] peer0.sales2.acornpub.com CLI인 cli2에 접속
+docker exec -it cli2 bash
+
+peer channel create -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/channel2.tx
+
+peer channel join -b channelsales2.block
+
+peer channel update -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/Sales2Organchors.tx
+
+export CORE_PEER_ADDRESS=peer1.sales2.acornpub.com:7051
+peer channel join -b channelsales2.block
+
+//
+export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051 //peer1로 잘못 표기
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
+
+peer channel join -b channelsales2.block
+//
+
+peer channel update -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/CustomerOrganchorsChannel2.tx
+
+export CORE_PEER_ADDRESS=peer1.customer.acornpub.com:7051 
+peer channel join -b channelsales2.block
+

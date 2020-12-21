@@ -24,6 +24,7 @@ mkdir config
 
 docker-compose up -d
 docker-compose -p net up -d orderer1.acornpub.com orderer2.acornpub.com kafka1.acornpub.com kafka2.acornpub.com kafka3.acornpub.com kafka4.acornpub.com zookeeper1.acornpub.com zookeeper2.acornpub.com zookeeper3.acornpub.com peer0.sales1.acornpub.com couchdb1 peer1.sales1.acornpub.com couchdb2 peer0.customer.acornpub.com couchdb3 peer1.customer.acornpub.com couchdb4 peer0.sales2.acornpub.com couchdb5 peer1.sales2.acornpub.com couchdb6 cli1 cli2
+
 export MSYS_NO_PATHCONV=1
 docker-compose -f docker-compose.yaml up -d
 ###################################################################################################
@@ -32,7 +33,11 @@ docker exec -it cli1 bash
 
 peer channel create -o orderer1.acornpub.com:7050 -c channelsales1 -f /etc/hyperledger/configtx/channel1.tx
 //Error: got unexpected status: SERVICE_UNAVAILABLE -- backing Kafka cluster has not completed booting; try again later
-// --> 조금 기다리고 다시 시도하면 됨
+// --> 조금 기다리고 다시 시도하면 됨 + 계속 시도하면 에러남 => 정말 1분 정도 기다리고 다시 시도
+//
+Error: got unexpected status: BAD_REQUEST -- error applying config update to existing channel 'channelsales1': error authorizing update: error validating ReadSet: proposed update requires that key [Group]  /Channel/Application be at version 0, but it is currently at version 1
+// --> 다시 처음으로 되돌아가야 함 --> 해결법 아직 못 찾음
+
 peer channel join -b channelsales1.block
 
 peer channel update -o orderer1.acornpub.com:7050 -c channelsales1 -f /etc/hyperledger/configtx/Sales1Organchors.tx
@@ -80,6 +85,7 @@ peer channel join -b channelsales2.block
 peer channel update -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/CustomerOrganchorsChannel2.tx
 
 export CORE_PEER_ADDRESS=peer1.customer.acornpub.com:7051 
+peer channel join -b channelsales2.block
 //--> Error: proposal failed (err: bad proposal response 500: cannot create ledger from genesis block: LedgerID already exists)
 export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051
 peer channel join -b channelsales2.block 
@@ -98,7 +104,7 @@ docker stop cli1 && docker rm cli1
 docker -p net up -d cli1
 빠져나오지 않고 계속 실행 --> 안전한 방법
 [터미널 1]
-set -ev
+set -ev //이것 때문인가?
 peer chaincode install -n music-cc-ch1 -v 1.0 -p chaincode/music-go2
 peer chaincode install -n music-cc-ch1 -v 1.0 -p chaincode/go
 
@@ -106,13 +112,16 @@ peer chaincode instantiate -o orderer1.acornpub.com:7050 -C channelsales1 -n mus
 
 //
 Error: could not assemble transaction, err proposal response was not successful, error code 500, msg chaincode registration failed: container exited with 0
-//
+// --> docker network ls로 확인 -> docker-compose.yaml의 net_acorn을 basic-network_acorn으로 치환
 
 peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -c '{"function":"initWallet","Args":[""]}'
 
 peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -c '{"function":"setMusic","Args":["Fabric","Hyper","20","1Q2W3E4R"]}'
 
 peer chaincode query -o orderer1.acornpub.com:7050 -C channelsales1 -n music-cc-ch1 -c '{"function":"getMusic","Args":["MS0"]}'
+//
+Error: endorsement failure during query. response: status:500 message:"Unknown function"
+//
 ###################################################################################################
 docker stop cli2 && docker rm cli2
 docker -p net up -d cli2
@@ -126,5 +135,8 @@ peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc
 
 peer chaincode invoke -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -c '{"function":"setMusic","Args":["Fabric","Hyper","10","1Q2W3E4R"]}'
 
-peer chaincode query -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -c '{"function":"getMusic","Args":["MS0"]}'
+peer chaincode query -o orderer1.acornpub.com:7050 -C channelsales2 -n music-cc-ch2 -c '{"function":"getMusic","Args":["MS0"]}' 
+//
+이 명령어는 잘 작동함 왜??
+//
 
