@@ -1,5 +1,5 @@
 cd $GOPATH/src/stream-music-2/basic-network
-
+rm -rf ./application/wallet/*
 rm -fr config/*
 rm -fr crypto-config/* //이것을 안해줘서 계속 에러남
 
@@ -53,11 +53,21 @@ export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/pee
 CORE_PEER_LOCALMSPID=CustomerOrg
 
 peer channel join -b channelsales1.block
-//
+///////////////////////////////////////////////////////////////////////////
+export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
 
 peer channel update -o orderer1.acornpub.com:7050 -c channelsales1 -f /etc/hyperledger/configtx/CustomerOrganchorsChannel1.tx
-
+///////////////////////////////////////////////////////////////////////////
 export CORE_PEER_ADDRESS=peer1.customer.acornpub.com:7051 
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
+
 peer channel join -b channelsales1.block
 ###################################################################################################
 [터미널2] peer0.sales2.acornpub.com CLI인 cli2에 접속
@@ -80,11 +90,22 @@ export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/pee
 CORE_PEER_LOCALMSPID=CustomerOrg
 
 peer channel join -b channelsales2.block
-//
+/////////////////////////////////////////////////////////////
+// #이 환경설정을 해야 체인코드 잘 작동
+export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051 
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
 
 peer channel update -o orderer1.acornpub.com:7050 -c channelsales2 -f /etc/hyperledger/configtx/CustomerOrganchorsChannel2.tx
-
+/////////////////////////////////////////////////////////////
 export CORE_PEER_ADDRESS=peer1.customer.acornpub.com:7051 
+
+export CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/customer.acornpub.com/users/Admin@customer.acornpub.com/msp
+
+CORE_PEER_LOCALMSPID=CustomerOrg
+
 peer channel join -b channelsales2.block
 //--> Error: proposal failed (err: bad proposal response 500: cannot create ledger from genesis block: LedgerID already exists)
 export CORE_PEER_ADDRESS=peer0.customer.acornpub.com:7051
